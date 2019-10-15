@@ -1,9 +1,30 @@
 #include <Arduino.h>
+#include <X9C.h>
 #include <math.h>
 
-int throttlePin = A0;
-int lockPin = 2;
-int isUnlocked = 0;
+#define DEBUG 1
+#define CALIBRATION_TIME 3000
+
+#define X9C_INC 4
+#define X9C_UD 3
+#define X9C_CS 5
+#define LOCK_PIN_IN 10
+#define LOCK_PIN_OUT 2
+#define THROTTLE_PIN A0
+
+#ifdef DEBUG
+  #define debugPrintLn(x)  Serial.println(x)
+  #define debugPrint(x)  Serial.print(x)
+#else
+  #define debugPrintLn(x)
+  #define debugPrint(x)
+#endif
+
+X9C pot;
+int sensorMin = 1023; // minimum sensor value
+int sensorMax = 0; // maximum sensor value
+int millisStop = 0;
+bool calibrated = false;
 
 float normalizeValue(float current, float start, float stop, float startValue, float stopValue) {
   float percent = round(max(0, min(100, 100 / (stop - start) * (current - start))));
@@ -13,32 +34,70 @@ float normalizeValue(float current, float start, float stop, float startValue, f
   return normalizedValue;
 }
 
-void setup() {
-  Serial.begin(9600);
-  pinMode(lockPin, INPUT);
-}
+void calibrate() {
+  if (calibrated) return;
+  calibrated = true;
+  debugPrintLn("calibrating ...");
+  unsigned long millisStop = millis() + CALIBRATION_TIME;
+  while (millis() < millisStop) {
+    debugPrint(millis());
+    debugPrint(" < ");
+    debugPrintLn(millisStop);
+    int sensorValue = analogRead(THROTTLE_PIN);
 
-int calibratedStart = 0;
-void loop() {
-  int unlocked = digitalRead(lockPin);
-  if (isUnlocked != unlocked) {
-    isUnlocked = unlocked;
-    if (isUnlocked) {
-      for (int i = 0; i <= 50; i++) {
-        int value = analogRead(throttlePin);
-        delay(10);
-        calibratedStart = ((calibratedStart * i) + value) / (i + 1);
-      }
-      Serial.println(calibratedStart);
-      Serial.println("unlocked. start driving");
-    } else {
-      Serial.println("locked");
+    // record the maximum sensor value
+    if (sensorValue > sensorMax) {
+      sensorMax = sensorValue;
+    }
+
+    // record the minimum sensor value
+    if (sensorValue < sensorMin) {
+      sensorMin = sensorValue;
     }
   }
-  if (isUnlocked) {
-    int val = analogRead(throttlePin);
-    float valF = normalizeValue(val, calibratedStart + 10, 840, 0, 255);
-    Serial.println(valF);
-    delay(250);
+  debugPrint("sensorMin: ");
+  debugPrint(sensorMin);
+  debugPrint("; sensorMax: ");
+  debugPrintLn(sensorMax);
+}
+
+void setPotValue() {
+  int valIn = analogRead(THROTTLE_PIN);
+  int valNormalized = normalizeValue(valIn, sensorMin, sensorMax, 0, 100);
+  pot.setPot(valNormalized, true);
+  debugPrint("in: ");
+  debugPrint(valIn);
+  debugPrint(" normalized: ");
+  debugPrintLn(valNormalized);
+}
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(LOCK_PIN_IN, INPUT);
+  pinMode(LOCK_PIN_OUT, OUTPUT);
+  pinMode(THROTTLE_PIN, INPUT);
+  pinMode (X9C_CS, OUTPUT);
+  pinMode (X9C_UD, OUTPUT);
+  pinMode (X9C_INC, OUTPUT);
+
+  pot.begin(X9C_CS,X9C_INC,X9C_UD);
+  pot.setPotMax(true);
+}
+
+int lastState = 0;
+void loop() {
+  int unlocked = digitalRead(LOCK_PIN_IN);
+
+
+  if (unlocked) {
+    if (unlocked != lastState) calibrate();
+    setPotValue();
+  } else {
+    if (unlocked != lastState) {
+      calibrated = false;
+      pot.setPotMax(true);
+    }
   }
+  lastState = unlocked;
+  digitalWrite(LOCK_PIN_OUT, unlocked ? 0 : 1);
 }
