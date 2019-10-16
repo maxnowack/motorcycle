@@ -2,7 +2,7 @@
 #include <X9C.h>
 #include <math.h>
 
-#define DEBUG 1
+#define DEBUG 0
 #define CALIBRATE_ON_START 0
 #define CALIBRATION_TIME 3000
 #define SENSOR_MIN 190 // sensor min value if calibration is disabled
@@ -15,7 +15,7 @@
 #define LOCK_PIN_OUT 2
 #define THROTTLE_PIN A0
 
-#ifdef DEBUG
+#if DEBUG >= 1
   #define debugPrintLn(x)  Serial.println(x)
   #define debugPrint(x)  Serial.print(x)
 #else
