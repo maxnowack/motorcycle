@@ -5,8 +5,8 @@
 #define DEBUG 1
 #define CALIBRATE_ON_START 0
 #define CALIBRATION_TIME 3000
-#define SENSOR_MIN 179 // sensor min value if calibration is disabled
-#define SENSOR_MAX 872 // sensor max value if calibration is disabled
+#define SENSOR_MIN 190 // sensor min value if calibration is disabled
+#define SENSOR_MAX 850 // sensor max value if calibration is disabled
 
 #define X9C_INC 4
 #define X9C_UD 3
