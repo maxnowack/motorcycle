@@ -3,7 +3,10 @@
 #include <math.h>
 
 #define DEBUG 1
+#define CALIBRATE_ON_START 0
 #define CALIBRATION_TIME 3000
+#define SENSOR_MIN 179 // sensor min value if calibration is disabled
+#define SENSOR_MAX 872 // sensor max value if calibration is disabled
 
 #define X9C_INC 4
 #define X9C_UD 3
@@ -21,8 +24,8 @@
 #endif
 
 X9C pot;
-int sensorMin = 1023; // minimum sensor value
-int sensorMax = 0; // maximum sensor value
+int sensorMin = CALIBRATE_ON_START ? 1023 : SENSOR_MIN; // minimum sensor value
+int sensorMax = CALIBRATE_ON_START ? 0 : SENSOR_MAX; // maximum sensor value
 int millisStop = 0;
 bool calibrated = false;
 
@@ -90,7 +93,7 @@ void loop() {
 
 
   if (unlocked) {
-    if (unlocked != lastState) calibrate();
+    if (CALIBRATE_ON_START && unlocked != lastState) calibrate();
     setPotValue();
   } else {
     if (unlocked != lastState) {
