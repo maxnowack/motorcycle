@@ -2,7 +2,6 @@
 #include <ArduinoJson.h>
 #include <math.h>
 #include <timer.h>
-#include "serial.h"
 
 #define THROTTLE_INPUT_PIN A0
 #define THROTTLE_OUTPUT_PIN 5
@@ -16,47 +15,66 @@ int currentThrottle = 0;
 
 Timer sendTimer;
 
-void onPacketReceived(const uint8_t* buffer, size_t size) {
-  StaticJsonDocument<1024> doc;
-
-  DeserializationError err = deserializeJson(doc, buffer, size);
-  if (err) {
-    // handle error
-  }
-
-  throttleMax = doc["throttleMax"];
-  throttleOverride = doc["throttle"];
-}
 
 void onTimerFired() {
-  StaticJsonDocument<256> doc;
+  // Create a comma-delimited string
+  String packet = String(throttleMax) + "," + String(throttleOverride == -1 ? currentThrottle : throttleOverride);
 
-  doc["throttleMax"] = throttleMax;
-  doc["throttle"]    = (throttleOverride == -1) ? currentThrottle : throttleOverride;
+  // Send via Serial
+  Serial.println(packet);
+}
 
-  // // Serialize to a buffer
-  uint8_t buffer[256];
-  size_t usedSize = serializeJson(doc, buffer);
+// String buffer to accumulate incoming characters from Serial
+String incomingData = "";
 
-  // // Send the utilized portion of the buffer
-  serialSend(buffer, usedSize);
+/**
+ * Parse incoming data in the format:
+ *   "<throttleMax>,<throttleOverride>"
+ * Example: "80,50" -> throttleMax=80, throttleOverride=50
+ */
+void parseIncomingData(const String &data) {
+  // Find the comma
+  int commaIndex = data.indexOf(',');
+  if (commaIndex == -1) {
+    // No comma, not a valid packet
+    return;
+  }
 
-  // serializeJson(doc, Serial);
-  // Serial.println();
+  // Extract substrings
+  String maxStr      = data.substring(0, commaIndex);
+  String overrideStr = data.substring(commaIndex + 1);
+
+  // Convert to int
+  throttleMax     = maxStr.toInt();
+  throttleOverride = overrideStr.toInt();
 }
 
 void setup() {
-  serialBegin(9600);
-  serialSetPacketHandler(&onPacketReceived);
+  Serial.begin(9600);
   pinMode(THROTTLE_INPUT_PIN, INPUT);
   pinMode(THROTTLE_OUTPUT_PIN, OUTPUT);
-  sendTimer.setInterval(100);
+  sendTimer.setInterval(50);
   sendTimer.setCallback(&onTimerFired);
   sendTimer.start();
 }
 
 void loop() {
-  serialUpdate();
+  // Read any available characters from Serial
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+
+    // Use newline (\n) as the end-of-packet marker
+    if (c == '\n') {
+      // We've got a full line, parse it
+      parseIncomingData(incomingData);
+      incomingData = ""; // Reset buffer
+    }
+    else if (c != '\r') {
+      // Append all other characters except carriage return (\r)
+      incomingData += c;
+    }
+  }
+
   sendTimer.update();
   delay(1);
 
